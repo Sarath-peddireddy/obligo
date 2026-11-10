@@ -1,0 +1,41 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend and generated output
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+playwright-report/
+test-results/
+*.trace
+
+# Environment, credentials and local data
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor and temporary files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+tmp/
+temp/
+.vercel/
