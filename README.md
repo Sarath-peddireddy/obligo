@@ -58,6 +58,36 @@ Agreement → Claude → Obligo MCP tools → Database → Workspace
 
 ## Architecture
 
+### What is built today
+
+```mermaid
+flowchart LR
+    Person(["👤 User"]) -->|"Reviews agreement"| Claude["Claude<br/>External MCP client"]
+    Person -->|"Reviews, edits and completes"| UI["Obligo workspace<br/>React + TypeScript"]
+
+    subgraph APP["OBLIGO · CURRENT IMPLEMENTATION"]
+        MCP["MCP server<br/>Streamable HTTP"]
+        API["REST API<br/>FastAPI"]
+        SVC["Shared services<br/>Validation · deadline rules"]
+        DB[("Contracts + obligations<br/>PostgreSQL / SQLite")]
+        MCP --> SVC
+        API --> SVC
+        SVC <--> DB
+    end
+
+    Claude -->|"Guest bearer credential<br/>4 MCP tools"| MCP
+    UI -->|"Session cookie + CSRF<br/>REST requests"| API
+
+    classDef actor fill:#f0f5ff,stroke:#7792d4,color:#172554,stroke-width:1px
+    classDef app fill:#f4f3ff,stroke:#8b83ce,color:#29215a,stroke-width:1px
+    classDef data fill:#ecf8f1,stroke:#70a98a,color:#173e2a,stroke-width:1px
+    class Person,Claude,UI actor
+    class MCP,API,SVC app
+    class DB data
+```
+
+Claude is a separately operated client: it interprets information provided by the user and calls Obligo's tools. Obligo does not call an AI inference API. The web app and MCP server use the same service layer and workspace-scoped records. The live deployment uses Vercel and Neon PostgreSQL; local development uses SQLite.
+
 | Layer | Implementation |
 | --- | --- |
 | Frontend | React · TypeScript · Vite |
@@ -68,6 +98,54 @@ Agreement → Claude → Obligo MCP tools → Database → Workspace
 | Icons and interface | Lucide · minimalist operational UI |
 
 Obligo exposes four MCP tools: `create_contract`, `add_obligation`, `list_contracts`, and `list_obligations`. These use the same persistent business records as the web application.
+
+### Data flow
+
+1. A visitor starts a guest session. The live demo creates a private workspace with clearly labeled fictional sample records.
+2. The user supplies an agreement to Claude and asks it to save structured contract details and obligations. Claude sends tool calls to Obligo over authenticated Streamable HTTP; raw agreement upload and document storage are not implemented by Obligo.
+3. FastAPI validates the calls and the shared services persist records. New extracted obligations start as **pending review**, with source clauses when supplied.
+4. The frontend reads the same records through the REST API. A person checks and edits the details, approves an obligation, and can mark it complete.
+5. Deadline labels are calculated deterministically from the workspace's configured timezone and date-only due dates. Completed and pending-review states take precedence over deadline states.
+
+### Where Volopay and a partner could fit
+
+Volopay describes [accounts payable](https://www.volopay.com/accounts-payable/), vendor payment workflows, and [accounting integrations](https://www.volopay.com/accounting-automation/) as parts of its finance platform. Contract commitments could complement those workflows by making renewal and notice obligations visible before a finance action is needed. This is a **product hypothesis**, not an existing integration or an endorsement by Volopay.
+
+```mermaid
+flowchart LR
+    Contract["Agreement + source terms"] --> Partner["Partner / Obligo<br/>Extract · verify · track obligations"]
+    Partner -. "Proposed, authorized handoff<br/>scope and mechanism to be agreed" .-> VP["Volopay<br/>Finance workflows, approvals<br/>and vendor payments"]
+    Person(["Customer team"]) -->|"Reviews obligations"| Partner
+    Person -->|"Controls finance actions"| VP
+
+    classDef partner fill:#f4f3ff,stroke:#8b83ce,color:#29215a
+    classDef platform fill:#eff7ff,stroke:#6c9ac8,color:#173d60
+    classDef human fill:#f6f7f9,stroke:#a0a8b5,color:#252b35
+    class Partner partner
+    class VP platform
+    class Contract,Person human
+```
+
+| Responsibility | Proposed owner | Status |
+| --- | --- | --- |
+| Contract capture, source clauses, obligation review and deadline tracking | Partner / Obligo | Built in the MVP as structured records; document storage is not implemented |
+| Spend controls, finance approvals and vendor-payment workflows | Volopay | Existing product area described in Volopay's public materials; no connection to Obligo exists |
+| Identity, tenant mapping, permissions, data exchange and support ownership | Volopay and partner together | To agree and validate; APIs, access and commercial terms are unconfirmed |
+| Confirming contractual meaning and authorizing any finance action | Customer | Human responsibility; not automated by Obligo |
+
+No Volopay API calls, payment initiation, spend controls, or account linking are implemented in this repository. A production handoff would depend on approved interfaces and explicit customer authorization.
+
+### Assumptions, limitations and next steps
+
+| Area | Current MVP / assumption | Next step for a production system |
+| --- | --- | --- |
+| Extraction | A user supplies content to Claude; model output can be wrong or incomplete. | Validate extraction quality with real review workflows; retain provenance and versioned source documents with consent. |
+| Identity and access | Guest workspaces use expiring sessions and workspace-specific MCP credentials. They are designed for a demo, not organization-wide access. | Design tenant identity, roles, lifecycle controls and a supported connector authorization flow. |
+| Integration | Volopay is a proposed adjacent platform. No integration contract, API access or partnership is assumed. | Confirm customer need, partner responsibilities, supported APIs, scopes and event/data mappings with Volopay. |
+| Operations | Statuses appear in the workspace; notifications, background reminders and durable audit history are not implemented. | Add appropriate monitoring, auditability, backups, retention and reminder workflows. |
+| Deployment | The live demo uses isolated guest workspaces and fictional sample data. Claude.ai connectivity itself has not been independently verified. | Validate the complete connector flow, reliability and security before handling confidential contracts. |
+
+The implementation uses React, TypeScript, Vite, FastAPI, the official Python MCP SDK, SQLAlchemy, Pydantic, PostgreSQL, SQLite and Playwright. Claude is an external client, not a bundled dependency.
 
 ## Try Obligo
 
